@@ -1,6 +1,37 @@
 import torch
 import torch.nn as nn
 import tiktoken
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+
+GPT_CONFIG_124M = {
+    "vocab_size": 50257,  # Vocabulary size
+    "context_length": 1024,  # Context length
+    "emb_dim": 768,  # Embedding dimension
+    "n_heads": 12,  # Number of attention heads
+    "n_layers": 12,  # Number of layers
+    "drop_rate": 0.1,  # Dropout rate
+    "qkv_bias": False  # Query-Key-Value bias
+}
+
+class GPTDatasetV1(Dataset):
+    def __init__(self, txt,tokenizer, context_size, stride):
+        token_ids = tokenizer.encode(txt)
+        assert len(token_ids) > context_size, "Text is too short"
+
+        self.input_ids = [torch.tensor(token_ids[i:i+context_size])
+                          for i in range(0, len(token_ids)-context_size, stride)]
+        self.target_ids = [torch.tensor(token_ids[i+1:i+context_size+1])
+                          for i in range(0, len(token_ids)-context_size, stride)]
+    def __len__(self):
+        return len(self.input_ids)
+    def __getitem__(self, idx):
+        return self.input_ids[idx], self.target_ids[idx]
+
+def dataloader_v1(txt,batch_size=3,context_size=5,stride=2,shuffle=False,drop_last=True,num_workers=0):
+    tokenizer = tiktoken.get_encoding("gpt2")
+    dataset = GPTDatasetV1(txt,tokenizer,context_size,stride)
+    return DataLoader(dataset, batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
 
 class MultiHeadAttention(nn.Module):
     """
@@ -131,36 +162,35 @@ def text_to_tensor(text,tokenizer):
 def tensor_to_text(tensor,tokenizer):
     return tokenizer.decode(tensor.squeeze(0).tolist())
 
-def main():
-    GPT_CONFIG_124M = {
-        "vocab_size": 50257,  # Vocabulary size
-        "context_length": 1024,  # Context length
-        "emb_dim": 768,  # Embedding dimension
-        "n_heads": 12,  # Number of attention heads
-        "n_layers": 12,  # Number of layers
-        "drop_rate": 0.1,  # Dropout rate
-        "qkv_bias": False  # Query-Key-Value bias
-    }
+def build_tokenizer():
+    return tiktoken.get_encoding("gpt2")
+
+def load_model():
     torch.manual_seed(123)
     model = GPT2Model(GPT_CONFIG_124M)
-    model.eval()  # disable dropout
+    model.eval()
+    return model
 
-    start_context = "Once upon a time there"
-    tokenizer = tiktoken.get_encoding("gpt2")
-    encoded_tensor = text_to_tensor(start_context,tokenizer)
-    print("input_text: ", start_context)
-    print("input_tensor: ", encoded_tensor)
+def complete_text(input_text, model, max_new_tokens=20, config=GPT_CONFIG_124M):
+    tokenizer = build_tokenizer()
+    encoded_tensor = text_to_tensor(input_text,tokenizer)
 
     out = generate_text_simple(
         model=model,
         idx=encoded_tensor,
-        max_new_tokens=6,
-        context_size=GPT_CONFIG_124M["context_length"]
+        max_new_tokens=max_new_tokens,
+        context_size=config["context_length"]
     )
 
-    print("Output:", out)
     decoded_text = tensor_to_text(out, tokenizer)
-    print(decoded_text)
+    return decoded_text
+
+def main():
+    start_context = "Once upon a time there"
+    model = load_model()
+    result = complete_text(start_context, model,10)
+    print(result)
+
 
 if __name__ == "__main__":
     main()
