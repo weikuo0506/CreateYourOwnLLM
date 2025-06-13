@@ -252,33 +252,41 @@ def train_model_simple(model, train_loader, val_loader, optimizer, device, num_e
     train_losses, val_losses, tokens_seen_track = [], [], []
     tokens_seen, step = 0, 0
 
-    for epoch in range(num_epochs):
-        model.train()
-        epoch_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", leave=True)
-        for input_batch, target_batch in train_loader:
-            optimizer.zero_grad()
-            loss = loss_batch(input_batch, target_batch, model, device)
-            loss.backward()
-            optimizer.step()
+    try:
+        for epoch in range(num_epochs):
+            model.train()
+            for input_batch, target_batch in train_loader:
+                optimizer.zero_grad()
+                loss = loss_batch(input_batch, target_batch, model, device)
+                loss.backward()
+                optimizer.step()
 
-            tokens_seen += input_batch.numel()
-            step += 1
+                tokens_seen += input_batch.numel()
+                step += 1
 
-            epoch_bar.set_postfix({
-                "loss": f"{loss.item():.4f}",
-                "tokens": tokens_seen
-            })
+                # Save checkpoint after each epoch
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                }, f"checkpoint_epoch{epoch}.pth")
 
-            if step % eval_freq == 0:
-                train_loss = loss_loader(train_loader, model, device, eval_iter)
-                val_loss = loss_loader(val_loader, model, device, eval_iter)
-                train_losses.append(train_loss)
-                val_losses.append(val_loss)
-                tokens_seen_track.append(tokens_seen)
-                print(f"Ep {epoch + 1} (Step {step:06d}): Train loss {train_loss:.3f}, Val loss {val_loss:.3f}")
-
-        generate_and_print_sample(model, tokenizer, device, start_context)
-
+                if step % eval_freq == 0:
+                    train_loss = loss_loader(train_loader, model, device, eval_iter)
+                    val_loss = loss_loader(val_loader, model, device, eval_iter)
+                    train_losses.append(train_loss)
+                    val_losses.append(val_loss)
+                    tokens_seen_track.append(tokens_seen)
+                    print(f"Ep {epoch + 1} (Step {step:06d}): Train loss {train_loss:.3f}, Val loss {val_loss:.3f}, Tokens seen: {tokens_seen}")
+                    generate_and_print_sample(model, tokenizer, device, start_context)
+    except KeyboardInterrupt:
+        print("🛑 Training interrupted. Saving checkpoint...")
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+        }, f"checkpoint_interrupted_epoch{epoch}.pth")
+        print("✅ Checkpoint saved. You can resume training later.")
     return train_losses, val_losses, tokens_seen_track
 
 
