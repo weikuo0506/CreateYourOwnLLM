@@ -126,7 +126,7 @@ class TransformerBlock(nn.Module):
 class GPT2Model(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.token_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
+        self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
         self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
         self.drop = nn.Dropout(cfg["drop_rate"])
 
@@ -137,7 +137,7 @@ class GPT2Model(nn.Module):
 
     def forward(self, token_ids):
         batch_size, seq_len = token_ids.shape
-        token_emb = self.token_emb(token_ids)
+        token_emb = self.tok_emb(token_ids)
         pos_emb = self.pos_emb(torch.arange(seq_len, device=token_ids.device))
         x = token_emb + pos_emb
         x = self.drop(x)
