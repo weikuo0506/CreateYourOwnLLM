@@ -247,13 +247,37 @@ def loss_loader(loader, model, device, num_batches=None):
     return total_loss / num_batches
 
 
+import os
+import torch
+
+
 def train_model_simple(model, train_loader, val_loader, optimizer, device, num_epochs,
-                       eval_freq, eval_iter, start_context, tokenizer):
+                       eval_freq, eval_iter, start_context, tokenizer,
+                       save_dir="checkpoints", resume_path=None):
+    os.makedirs(save_dir, exist_ok=True)
+
+    # === Initialize training state ===
+    start_epoch = 0
+    step = 0
+    tokens_seen = 0
     train_losses, val_losses, tokens_seen_track = [], [], []
-    tokens_seen, step = 0, 0
+
+    # === Resume from checkpoint if provided ===
+    if resume_path and os.path.exists(resume_path):
+        print(f"🔁 Resuming from checkpoint: {resume_path}")
+        checkpoint = torch.load(resume_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint.get('epoch', 0)
+        step = checkpoint.get('step', 0)
+        tokens_seen = checkpoint.get('tokens_seen', 0)
+        train_losses = checkpoint.get('train_losses', [])
+        val_losses = checkpoint.get('val_losses', [])
+        tokens_seen_track = checkpoint.get('tokens_seen_track', [])
+        print(f"✅ Resumed at epoch {start_epoch}, step {step}, tokens seen: {tokens_seen}")
 
     try:
-        for epoch in range(num_epochs):
+        for epoch in range(start_epoch, num_epochs):
             model.train()
             for input_batch, target_batch in train_loader:
                 optimizer.zero_grad()
@@ -264,29 +288,60 @@ def train_model_simple(model, train_loader, val_loader, optimizer, device, num_e
                 tokens_seen += input_batch.numel()
                 step += 1
 
-                # Save checkpoint after each epoch
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                }, f"checkpoint_epoch{epoch}.pth")
-
                 if step % eval_freq == 0:
                     train_loss = loss_loader(train_loader, model, device, eval_iter)
                     val_loss = loss_loader(val_loader, model, device, eval_iter)
                     train_losses.append(train_loss)
                     val_losses.append(val_loss)
                     tokens_seen_track.append(tokens_seen)
-                    print(f"Ep {epoch + 1} (Step {step:06d}): Train loss {train_loss:.3f}, Val loss {val_loss:.3f}, Tokens seen: {tokens_seen}")
+                    print(
+                        f"Ep {epoch + 1} (Step {step:06d}): Train loss {train_loss:.3f}, Val loss {val_loss:.3f}, Tokens seen: {tokens_seen}")
                     generate_and_print_sample(model, tokenizer, device, start_context)
+
+            # Save checkpoint after each epoch
+            checkpoint_path = os.path.join(save_dir, f"checkpoint_epoch{epoch + 1}.pth")
+            torch.save({
+                'epoch': epoch + 1,
+                'step': step,
+                'tokens_seen': tokens_seen,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_losses': train_losses,
+                'val_losses': val_losses,
+                'tokens_seen_track': tokens_seen_track,
+            }, checkpoint_path)
+            print(f"💾 Checkpoint saved: {checkpoint_path}")
+
     except KeyboardInterrupt:
         print("🛑 Training interrupted. Saving checkpoint...")
+        interrupted_path = os.path.join(save_dir, f"checkpoint_interrupted_epoch{epoch + 1}.pth")
         torch.save({
-            'epoch': epoch,
+            'epoch': epoch + 1,
+            'step': step,
+            'tokens_seen': tokens_seen,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-        }, f"checkpoint_interrupted_epoch{epoch}.pth")
-        print("✅ Checkpoint saved. You can resume training later.")
+            'train_losses': train_losses,
+            'val_losses': val_losses,
+            'tokens_seen_track': tokens_seen_track,
+        }, interrupted_path)
+        print(f"✅ Checkpoint saved: {interrupted_path}")
+        return train_losses, val_losses, tokens_seen_track
+
+    # Save final model
+    final_path = os.path.join(save_dir, "final_model.pth")
+    torch.save({
+        'epoch': num_epochs,
+        'step': step,
+        'tokens_seen': tokens_seen,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'train_losses': train_losses,
+        'val_losses': val_losses,
+        'tokens_seen_track': tokens_seen_track,
+    }, final_path)
+    print(f"🎉 Training complete. Final model saved: {final_path}")
+
     return train_losses, val_losses, tokens_seen_track
 
 
