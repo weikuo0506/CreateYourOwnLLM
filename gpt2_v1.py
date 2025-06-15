@@ -68,7 +68,7 @@ class MultiHeadAttention(nn.Module):
         V = self.W_V(x).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
 
         # Compute attention scores
-        scores = Q @ K.transpose(-2, -1) / (self.d_out ** 0.5)  # (batch_size, num_heads, seq_len, seq_len)
+        scores = Q @ K.transpose(-2, -1) / (self.head_dim ** 0.5)  # (batch_size, num_heads, seq_len, seq_len)
 
         # Apply causal mask
         scores = scores.masked_fill(self.mask[:seq_len, :seq_len], -torch.inf)
