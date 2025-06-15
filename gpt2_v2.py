@@ -296,7 +296,9 @@ def train_model_simple(model, train_loader, val_loader, optimizer, device, num_e
                     tokens_seen_track.append(tokens_seen)
                     print(
                         f"Ep {epoch + 1} (Step {step:06d}): Train loss {train_loss:.3f}, Val loss {val_loss:.3f}, Tokens seen: {tokens_seen}")
-                    generate_and_print_sample(model, tokenizer, device, start_context)
+
+            # generate sample after each epoch
+            generate_and_print_sample(model, tokenizer, device, start_context)
 
             # Save checkpoint after each epoch
             checkpoint_path = os.path.join(save_dir, f"checkpoint_epoch{epoch + 1}.pth")
