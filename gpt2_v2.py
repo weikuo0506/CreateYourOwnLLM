@@ -148,8 +148,9 @@ class GPT2Model(nn.Module):
 
 
 # updated to v2 to support temperature scaling and top_k sampling
-def generate_text_simple(model, idx, max_new_tokens, context_size, temperature=0.0, top_k=None, eos_id=None):
+def generate_text_simple(model, idx, max_new_tokens, context_size, temperature=0.0, top_k=None, eos_id=None,device=torch.device("cpu")):
     for _ in range(max_new_tokens):
+        idx = idx.to(device)
         idx_cond = idx[:, -context_size:]
 
         # Get logits from model
@@ -201,14 +202,14 @@ def build_tokenizer():
     return tiktoken.get_encoding("gpt2")
 
 
-def load_model():
+def load_model(device=torch.device("cpu")):
     torch.manual_seed(123)
-    model = GPT2Model(GPT_CONFIG_124M)
+    model = GPT2Model(GPT_CONFIG_124M).to(device)
     model.eval()
     return model
 
 
-def complete_text(input_text, model, max_new_tokens=20, config=GPT_CONFIG_124M):
+def complete_text(input_text, model, max_new_tokens=20, config=GPT_CONFIG_124M,device=torch.device("cpu")):
     tokenizer = build_tokenizer()
     encoded_tensor = text_to_tensor(input_text, tokenizer)
 
@@ -216,7 +217,8 @@ def complete_text(input_text, model, max_new_tokens=20, config=GPT_CONFIG_124M):
         model=model,
         idx=encoded_tensor,
         max_new_tokens=max_new_tokens,
-        context_size=config["context_length"]
+        context_size=config["context_length"],
+        device=device
     )
 
     decoded_text = tensor_to_text(out, tokenizer)
@@ -369,15 +371,16 @@ def plot_losses(epochs, tokens, train_losses, val_losses):
 def generate_and_print_sample(model, tokenizer, device, start_context):
     model.eval()
     with torch.no_grad():
-        result = complete_text(start_context, model, 20)
+        result = complete_text(start_context, model, 20,device)
         print(result)
     model.train()
 
 
 def main():
     start_context = "Once upon a time there"
-    model = load_model()
-    result = complete_text(start_context, model, 10)
+    device = torch.device("mps")
+    model = load_model(device)
+    result = complete_text(start_context, model, 10,device=device)
     print(result)
 
 

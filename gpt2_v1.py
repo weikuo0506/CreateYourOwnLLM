@@ -132,8 +132,9 @@ class GPT2Model(nn.Module):
         logits = self.out_head(x)
         return logits
 
-def generate_text_simple(model, idx, max_new_tokens, context_size):
+def generate_text_simple(model, idx, max_new_tokens, context_size,device=torch.device("cpu")):
     for _ in range(max_new_tokens):
+        idx = idx.to(device)
         idx_cond = idx[:, -context_size:]
 
         # Get logits from model
@@ -171,7 +172,7 @@ def load_model():
     model.eval()
     return model
 
-def complete_text(input_text, model, max_new_tokens=20, config=GPT_CONFIG_124M):
+def complete_text(input_text, model, max_new_tokens=20, config=GPT_CONFIG_124M,device= torch.device("cpu")):
     tokenizer = build_tokenizer()
     encoded_tensor = text_to_tensor(input_text,tokenizer)
 
@@ -179,7 +180,8 @@ def complete_text(input_text, model, max_new_tokens=20, config=GPT_CONFIG_124M):
         model=model,
         idx=encoded_tensor,
         max_new_tokens=max_new_tokens,
-        context_size=config["context_length"]
+        context_size=config["context_length"],
+        device=device
     )
 
     decoded_text = tensor_to_text(out, tokenizer)
