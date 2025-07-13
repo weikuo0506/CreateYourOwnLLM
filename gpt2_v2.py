@@ -371,7 +371,7 @@ def plot_losses(epochs, tokens, train_losses, val_losses):
 def generate_and_print_sample(model, tokenizer, device, start_context):
     model.eval()
     with torch.no_grad():
-        result = complete_text(start_context, model, 20,device)
+        result = complete_text(start_context, model, 20,device=device)
         print(result)
     model.train()
 
